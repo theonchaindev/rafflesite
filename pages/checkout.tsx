@@ -52,17 +52,15 @@ function CheckoutForm({ clientSecret, total, onSuccess }: { clientSecret: string
     }
 
     if (paymentIntent?.status === "succeeded") {
-      const res = await fetch("/api/payment/confirm", {
+      // Fire-and-forget confirm (sends email, generates tickets)
+      fetch("/api/payment/confirm", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ paymentIntentId: paymentIntent.id }),
-      });
-      const data = await res.json();
-      if (data.orderId) {
-        onSuccess(data.orderId);
-      } else {
-        setError("Payment confirmed but order not found. Please contact support.");
-      }
+      }).catch(() => {});
+      // orderId is pi_ ID without the prefix
+      const orderId = paymentIntent.id.replace("pi_", "");
+      onSuccess(orderId);
     }
 
     setLoading(false);

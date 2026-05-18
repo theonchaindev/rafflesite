@@ -1,41 +1,15 @@
-import type { GetServerSideProps } from "next";
+import type { GetStaticProps } from "next";
 import Head from "next/head";
 import Link from "next/link";
 import Image from "next/image";
 import { ChevronRight, Star, Shield, Zap, Trophy, Gift } from "lucide-react";
 import Layout from "@/components/Layout";
 import CompetitionCard from "@/components/CompetitionCard";
-import CountdownTimer from "@/components/CountdownTimer";
-import prisma from "@/lib/prisma";
-
-interface CompetitionItem {
-  id: string;
-  title: string;
-  slug: string;
-  description: string;
-  prizeValue: number;
-  ticketPrice: number;
-  maxTickets: number;
-  ticketsSold: number;
-  drawDate: string;
-  imageUrl: string | null;
-  maxPerOrder: number;
-}
-
-interface WinnerItem {
-  id: string;
-  winnerName: string;
-  announcedAt: string;
-  competition: {
-    title: string;
-    prizeValue: number;
-    imageUrl: string | null;
-  };
-}
+import { getCompetitions, getWinners, type Competition, type Winner } from "@/data/competitions";
 
 interface Props {
-  competitions: CompetitionItem[];
-  winners: WinnerItem[];
+  competitions: Competition[];
+  winners: Winner[];
   siteName: string;
 }
 
@@ -43,13 +17,12 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
   return (
     <>
       <Head>
-        <title>{siteName} — Win Premium Prizes</title>
+        <title>{`${siteName} — Win Premium Prizes`}</title>
         <meta name="description" content="Enter our premium competitions and win life-changing prizes. Fully licensed and compliant with UK competition law." />
       </Head>
       <Layout>
         {/* Hero */}
         <section style={{ position: "relative", minHeight: "92vh", display: "flex", alignItems: "center", overflow: "hidden", background: "linear-gradient(160deg, #0d0d0d 0%, #1a1205 50%, #0d0d0d 100%)" }}>
-          {/* Background decoration */}
           <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
             <div style={{ position: "absolute", top: "10%", left: "5%", width: "600px", height: "600px", background: "radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 70%)", borderRadius: "50%" }} />
             <div style={{ position: "absolute", bottom: "10%", right: "5%", width: "400px", height: "400px", background: "radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%)", borderRadius: "50%" }} />
@@ -70,7 +43,7 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
                 </h1>
 
                 <p style={{ color: "#aaa", fontSize: "18px", lineHeight: "1.7", marginBottom: "36px", maxWidth: "520px" }}>
-                  Enter our exclusive competitions for a chance to win luxury cars, holidays, cash prizes, and more. Tickets from just £1.99.
+                  Enter our exclusive competitions for a chance to win luxury cars, holidays, cash prizes, and more. Tickets from just £0.49.
                 </p>
 
                 <div className="flex flex-wrap gap-4">
@@ -79,14 +52,13 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
                       Enter Now <ChevronRight size={18} />
                     </button>
                   </Link>
-                  <Link href="/how-it-works">
+                  <Link href="/faq">
                     <button className="btn-outline-gold" style={{ fontSize: "15px", padding: "15px 28px" }}>
                       How It Works
                     </button>
                   </Link>
                 </div>
 
-                {/* Trust signals */}
                 <div className="flex flex-wrap gap-6 mt-10">
                   {[
                     { icon: Shield, label: "UK Law Compliant" },
@@ -101,7 +73,6 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
                 </div>
               </div>
 
-              {/* Stats */}
               <div className="hidden lg:grid grid-cols-2 gap-4">
                 {[
                   { value: "£500K+", label: "In Prizes Won" },
@@ -125,9 +96,7 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
         <section id="competitions" style={{ padding: "80px 0" }}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center" style={{ marginBottom: "56px" }}>
-              <p style={{ color: "#c9a84c", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "12px" }}>
-                Live Competitions
-              </p>
+              <p style={{ color: "#c9a84c", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "12px" }}>Live Competitions</p>
               <h2 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: "#f5f0e8" }}>
                 Enter to Win
               </h2>
@@ -152,34 +121,16 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
         <section style={{ padding: "80px 0", background: "#080808", borderTop: "1px solid rgba(201,168,76,0.1)", borderBottom: "1px solid rgba(201,168,76,0.1)" }}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center" style={{ marginBottom: "56px" }}>
-              <p style={{ color: "#c9a84c", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "12px" }}>
-                Simple Process
-              </p>
+              <p style={{ color: "#c9a84c", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "12px" }}>Simple Process</p>
               <h2 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: "#f5f0e8" }}>
                 How It Works
               </h2>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               {[
-                {
-                  step: "01",
-                  icon: Zap,
-                  title: "Pick Your Tickets",
-                  desc: "Browse our live competitions and choose how many tickets you want to enter. More tickets = more chances to win.",
-                },
-                {
-                  step: "02",
-                  icon: Shield,
-                  title: "Secure Checkout",
-                  desc: "Complete your purchase with our 100% secure payment system. We accept card, Apple Pay, Google Pay, and Klarna.",
-                },
-                {
-                  step: "03",
-                  icon: Trophy,
-                  title: "You Could Win",
-                  desc: "Your ticket numbers are assigned instantly. If your number is drawn at the deadline, you win the prize!",
-                },
+                { step: "01", icon: Zap, title: "Pick Your Tickets", desc: "Browse our live competitions and choose how many tickets you want. More tickets = more chances to win." },
+                { step: "02", icon: Shield, title: "Secure Checkout", desc: "Complete your purchase with our 100% secure payment system. We accept card, Apple Pay, Google Pay, and Klarna." },
+                { step: "03", icon: Trophy, title: "You Could Win", desc: "Your ticket numbers are assigned instantly. If your number is drawn at the deadline, you win the prize!" },
               ].map(({ step, icon: Icon, title, desc }) => (
                 <div key={step} className="glass-card" style={{ padding: "36px 28px", textAlign: "center" }}>
                   <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: "20px" }}>
@@ -190,9 +141,7 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
                       {step}
                     </span>
                   </div>
-                  <h3 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "20px", fontWeight: 700, color: "#f5f0e8", marginBottom: "12px" }}>
-                    {title}
-                  </h3>
+                  <h3 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "20px", fontWeight: 700, color: "#f5f0e8", marginBottom: "12px" }}>{title}</h3>
                   <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>{desc}</p>
                 </div>
               ))}
@@ -205,20 +154,17 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
           <section id="winners" style={{ padding: "80px 0" }}>
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="text-center" style={{ marginBottom: "56px" }}>
-                <p style={{ color: "#c9a84c", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "12px" }}>
-                  Hall of Fame
-                </p>
+                <p style={{ color: "#c9a84c", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "2px", marginBottom: "12px" }}>Hall of Fame</p>
                 <h2 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "clamp(32px, 4vw, 48px)", fontWeight: 700, color: "#f5f0e8" }}>
                   Recent Winners
                 </h2>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {winners.map((w) => (
                   <div key={w.id} className="glass-card" style={{ padding: "24px", display: "flex", gap: "16px", alignItems: "center" }}>
-                    {w.competition.imageUrl ? (
+                    {w.imageUrl ? (
                       <div style={{ position: "relative", width: "70px", height: "70px", borderRadius: "8px", overflow: "hidden", flexShrink: 0 }}>
-                        <Image src={w.competition.imageUrl} alt={w.competition.title} fill style={{ objectFit: "cover" }} />
+                        <Image src={w.imageUrl} alt={w.competitionTitle} fill style={{ objectFit: "cover" }} />
                       </div>
                     ) : (
                       <div style={{ width: "70px", height: "70px", borderRadius: "8px", background: "rgba(201,168,76,0.1)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -226,18 +172,10 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
                       </div>
                     )}
                     <div>
-                      <div style={{ color: "#c9a84c", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>
-                        Winner
-                      </div>
-                      <div style={{ color: "#f5f0e8", fontSize: "16px", fontWeight: 600, marginBottom: "2px" }}>
-                        {w.winnerName}
-                      </div>
-                      <div style={{ color: "#888", fontSize: "13px", marginBottom: "4px" }}>
-                        {w.competition.title}
-                      </div>
-                      <div style={{ color: "#c9a84c", fontSize: "14px", fontWeight: 700 }}>
-                        £{w.competition.prizeValue.toLocaleString()}
-                      </div>
+                      <div style={{ color: "#c9a84c", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "4px" }}>Winner</div>
+                      <div style={{ color: "#f5f0e8", fontSize: "16px", fontWeight: 600, marginBottom: "2px" }}>{w.winnerName}</div>
+                      <div style={{ color: "#888", fontSize: "13px", marginBottom: "4px" }}>{w.competitionTitle}</div>
+                      <div style={{ color: "#c9a84c", fontSize: "14px", fontWeight: 700 }}>£{w.prizeValue.toLocaleString()}</div>
                     </div>
                   </div>
                 ))}
@@ -246,7 +184,7 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
           </section>
         )}
 
-        {/* CTA banner */}
+        {/* CTA */}
         <section style={{ padding: "60px 0" }}>
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div style={{ background: "linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04))", border: "1px solid rgba(201,168,76,0.25)", borderRadius: "16px", padding: "clamp(32px, 5vw, 60px)", textAlign: "center" }}>
@@ -257,9 +195,7 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
                 Tickets are selling fast. Enter today for your chance to win a life-changing prize.
               </p>
               <Link href="#competitions">
-                <button className="btn-gold" style={{ fontSize: "16px", padding: "16px 40px" }}>
-                  Browse Competitions
-                </button>
+                <button className="btn-gold" style={{ fontSize: "16px", padding: "16px 40px" }}>Browse Competitions</button>
               </Link>
             </div>
           </div>
@@ -269,35 +205,13 @@ export default function HomePage({ competitions, winners, siteName }: Props) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps = async () => {
-  const [competitions, winners] = await Promise.all([
-    prisma.competition.findMany({
-      where: { status: "active" },
-      orderBy: { drawDate: "asc" },
-    }),
-    prisma.winner.findMany({
-      take: 6,
-      orderBy: { announcedAt: "desc" },
-      include: {
-        competition: {
-          select: { title: true, prizeValue: true, imageUrl: true },
-        },
-      },
-    }),
-  ]);
-
+export const getStaticProps: GetStaticProps = async () => {
   return {
     props: {
-      competitions: competitions.map((c) => ({
-        ...c,
-        drawDate: c.drawDate.toISOString(),
-        createdAt: c.createdAt.toISOString(),
-      })),
-      winners: winners.map((w) => ({
-        ...w,
-        announcedAt: w.announcedAt.toISOString(),
-      })),
+      competitions: getCompetitions(),
+      winners: getWinners(),
       siteName: process.env.NEXT_PUBLIC_SITE_NAME || "LuxRaffle",
     },
+    revalidate: 60,
   };
 };

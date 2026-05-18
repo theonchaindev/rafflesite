@@ -1,47 +1,33 @@
 import type { GetServerSideProps } from "next";
 import Head from "next/head";
-import { DollarSign, Trophy, ShoppingBag, Users } from "lucide-react";
+import { Trophy, ShoppingBag, DollarSign, Info } from "lucide-react";
 import AdminLayout from "@/components/admin/AdminLayout";
-import prisma from "@/lib/prisma";
+import { getCompetitions, getWinners } from "@/data/competitions";
 import { verifyAdminToken } from "@/lib/auth";
 
-interface DashboardProps {
-  totalRevenue: number;
-  activeCompetitions: number;
-  totalOrders: number;
-  recentOrders: Array<{
-    id: string;
-    customerName: string;
-    email: string;
-    total: number;
-    status: string;
-    createdAt: string;
-    competitionTitles: string[];
-  }>;
-}
-
-export default function AdminDashboard({ totalRevenue, activeCompetitions, totalOrders, recentOrders }: DashboardProps) {
-  const stats = [
-    { label: "Total Revenue", value: `£${totalRevenue.toFixed(2)}`, icon: DollarSign, color: "#27ae60" },
-    { label: "Active Competitions", value: activeCompetitions, icon: Trophy, color: "#c9a84c" },
-    { label: "Total Orders", value: totalOrders, icon: ShoppingBag, color: "#3498db" },
-    { label: "Paid Orders", value: recentOrders.filter((o) => o.status === "paid").length, icon: Users, color: "#9b59b6" },
-  ];
-
+export default function AdminDashboard({ competitionCount, winnerCount }: { competitionCount: number; winnerCount: number }) {
   return (
     <>
       <Head><title>Dashboard — Admin</title></Head>
       <AdminLayout>
         <div style={{ marginBottom: "28px" }}>
-          <h1 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "28px", fontWeight: 700, color: "#f5f0e8" }}>
-            Dashboard
-          </h1>
+          <h1 style={{ fontFamily: "var(--font-playfair), Georgia, serif", fontSize: "28px", fontWeight: 700, color: "#f5f0e8" }}>Dashboard</h1>
           <p style={{ color: "#666", fontSize: "14px", marginTop: "4px" }}>Overview of your competition platform</p>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" style={{ marginBottom: "32px" }}>
-          {stats.map(({ label, value, icon: Icon, color }) => (
+        <div style={{ background: "rgba(201,168,76,0.05)", border: "1px solid rgba(201,168,76,0.2)", borderRadius: "10px", padding: "16px 20px", marginBottom: "28px", display: "flex", gap: "12px", alignItems: "flex-start" }}>
+          <Info size={18} style={{ color: "#c9a84c", flexShrink: 0, marginTop: "2px" }} />
+          <p style={{ color: "#aaa", fontSize: "14px", lineHeight: "1.6" }}>
+            This site is running in <strong style={{ color: "#c9a84c" }}>database-free mode</strong>. Competitions are managed by editing <code style={{ background: "#1a1a1a", padding: "2px 6px", borderRadius: "4px", color: "#c9a84c", fontSize: "12px" }}>data/competitions.ts</code>. Orders and payment data are stored in Stripe.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-5" style={{ marginBottom: "32px" }}>
+          {[
+            { label: "Active Competitions", value: competitionCount, icon: Trophy, color: "#c9a84c" },
+            { label: "Past Winners", value: winnerCount, icon: DollarSign, color: "#27ae60" },
+            { label: "Payment Provider", value: "Stripe", icon: ShoppingBag, color: "#3498db" },
+          ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "20px 24px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
@@ -56,56 +42,15 @@ export default function AdminDashboard({ totalRevenue, activeCompetitions, total
           ))}
         </div>
 
-        {/* Recent orders */}
-        <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "10px", overflow: "hidden" }}>
-          <div style={{ padding: "20px 24px", borderBottom: "1px solid #1a1a1a" }}>
-            <h2 style={{ color: "#f5f0e8", fontSize: "16px", fontWeight: 600 }}>Recent Orders</h2>
-          </div>
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr style={{ background: "#0d0d0d" }}>
-                  {["Order", "Customer", "Competitions", "Amount", "Status", "Date"].map((h) => (
-                    <th key={h} style={{ padding: "12px 16px", textAlign: "left", color: "#666", fontSize: "12px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {recentOrders.map((order) => (
-                  <tr key={order.id} style={{ borderTop: "1px solid #1a1a1a" }}>
-                    <td style={{ padding: "14px 16px", color: "#c9a84c", fontSize: "13px", fontWeight: 600 }}>
-                      #{order.id.slice(-6).toUpperCase()}
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <div style={{ color: "#f5f0e8", fontSize: "14px" }}>{order.customerName}</div>
-                      <div style={{ color: "#666", fontSize: "12px" }}>{order.email}</div>
-                    </td>
-                    <td style={{ padding: "14px 16px", color: "#888", fontSize: "13px", maxWidth: "200px" }}>
-                      {order.competitionTitles.join(", ")}
-                    </td>
-                    <td style={{ padding: "14px 16px", color: "#f5f0e8", fontSize: "14px", fontWeight: 600 }}>
-                      £{order.total.toFixed(2)}
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <span style={{ padding: "3px 10px", borderRadius: "100px", fontSize: "12px", fontWeight: 600, background: order.status === "paid" ? "rgba(39,174,96,0.15)" : "rgba(231,76,60,0.15)", color: order.status === "paid" ? "#27ae60" : "#e74c3c", border: `1px solid ${order.status === "paid" ? "rgba(39,174,96,0.3)" : "rgba(231,76,60,0.3)"}` }}>
-                        {order.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: "14px 16px", color: "#666", fontSize: "13px" }}>
-                      {new Date(order.createdAt).toLocaleDateString("en-GB")}
-                    </td>
-                  </tr>
-                ))}
-                {recentOrders.length === 0 && (
-                  <tr>
-                    <td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "#555" }}>No orders yet</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div style={{ background: "#111", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "24px" }}>
+          <h2 style={{ color: "#f5f0e8", fontSize: "16px", fontWeight: 600, marginBottom: "16px" }}>Managing Competitions</h2>
+          <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7", marginBottom: "16px" }}>
+            To add or edit competitions, update the <code style={{ background: "#1a1a1a", padding: "2px 6px", borderRadius: "4px", color: "#c9a84c" }}>data/competitions.ts</code> file and redeploy. Each competition needs a unique <code style={{ background: "#1a1a1a", padding: "2px 6px", borderRadius: "4px", color: "#c9a84c" }}>id</code> and <code style={{ background: "#1a1a1a", padding: "2px 6px", borderRadius: "4px", color: "#c9a84c" }}>slug</code>.
+          </p>
+          <p style={{ color: "#888", fontSize: "14px", lineHeight: "1.7" }}>
+            To view orders and payment data, log in to your{" "}
+            <a href="https://dashboard.stripe.com/payments" target="_blank" rel="noopener noreferrer" style={{ color: "#c9a84c" }}>Stripe Dashboard</a>. Customer details and ticket metadata are stored in each payment intent.
+          </p>
         </div>
       </AdminLayout>
     </>
@@ -118,30 +63,10 @@ export const getServerSideProps: GetServerSideProps = async ({ req }) => {
   const session = await verifyAdminToken(token);
   if (!session) return { redirect: { destination: "/admin/login", permanent: false } };
 
-  const [orders, competitionCount, revenue] = await Promise.all([
-    prisma.order.findMany({
-      take: 20,
-      orderBy: { createdAt: "desc" },
-      include: { tickets: { include: { competition: { select: { title: true } } } } },
-    }),
-    prisma.competition.count({ where: { status: "active" } }),
-    prisma.order.aggregate({ where: { status: "paid" }, _sum: { total: true } }),
-  ]);
-
   return {
     props: {
-      totalRevenue: revenue._sum.total ?? 0,
-      activeCompetitions: competitionCount,
-      totalOrders: await prisma.order.count(),
-      recentOrders: orders.map((o) => ({
-        id: o.id,
-        customerName: o.customerName,
-        email: o.email,
-        total: o.total,
-        status: o.status,
-        createdAt: o.createdAt.toISOString(),
-        competitionTitles: [...new Set(o.tickets.map((t) => t.competition.title))],
-      })),
+      competitionCount: getCompetitions().length,
+      winnerCount: getWinners().length,
     },
   };
 };

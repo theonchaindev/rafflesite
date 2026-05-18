@@ -1,7 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { getStripeServer } from "@/lib/stripe";
-import prisma from "@/lib/prisma";
 import { sendOrderConfirmationEmail } from "@/lib/email";
+
+function generateTicketNumbers(seed: string, quantity: number, maxTickets: number): number[] {
+  // Deterministic ticket numbers based on payment intent ID + competition
+  const tickets = new Set<number>();
+  let counter = 0;
+  while (tickets.size < quantity) {
+    const hash = Array.from(`${seed}-${counter++}`).reduce((acc, c) => Math.imul(31, acc) + c.charCodeAt(0), 0);
+    const num = (Math.abs(hash) % maxTickets) + 1;
+    tickets.add(num);
+  }
+  return Array.from(tickets).sort((a, b) => a - b);
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).end();
@@ -16,79 +27,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: "Payment not succeeded" });
   }
 
-  const { orderId, items: itemsJson } = paymentIntent.metadata;
-  if (!orderId) return res.status(400).json({ error: "Missing orderId in metadata" });
+  const { customerName, customerEmail, customerPhone, items: itemsJson } = paymentIntent.metadata;
+  const items: Array<{ competitionId: string; competitionTitle: string; quantity: number; ticketPrice: number }> = JSON.parse(itemsJson || "[]");
 
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: { tickets: true },
+  // Generate ticket groups for each competition
+  const ticketGroups = items.map((item) => {
+    const ticketNumbers = generateTicketNumbers(
+      `${paymentIntentId}-${item.competitionId}`,
+      item.quantity,
+      10000
+    );
+    return { competitionTitle: item.competitionTitle, ticketNumbers, quantity: item.quantity };
   });
 
-  if (!order) return res.status(404).json({ error: "Order not found" });
+  const total = items.reduce((sum, i) => sum + i.ticketPrice * i.quantity, 0);
+  const orderId = paymentIntentId.replace("pi_", "");
 
-  // Already fulfilled
-  if (order.status === "paid") {
-    return res.status(200).json({ orderId: order.id });
-  }
-
-  const items: Array<{ competitionId: string; quantity: number }> = JSON.parse(itemsJson || "[]");
-
-  // Assign tickets in a transaction
-  await prisma.$transaction(async (tx) => {
-    // Update order status
-    await tx.order.update({
-      where: { id: orderId },
-      data: { status: "paid" },
-    });
-
-    // For each competition, assign sequential ticket numbers
-    for (const item of items) {
-      const comp = await tx.competition.findUnique({ where: { id: item.competitionId } });
-      if (!comp) continue;
-
-      const startTicket = comp.ticketsSold + 1;
-      const ticketData = Array.from({ length: item.quantity }, (_, i) => ({
-        ticketNumber: startTicket + i,
-        competitionId: item.competitionId,
-        orderId,
-      }));
-
-      await tx.ticket.createMany({ data: ticketData });
-      await tx.competition.update({
-        where: { id: item.competitionId },
-        data: { ticketsSold: { increment: item.quantity } },
-      });
-    }
+  // Send confirmation email
+  await sendOrderConfirmationEmail({
+    to: customerEmail,
+    customerName,
+    orderId,
+    tickets: ticketGroups,
+    total,
   });
 
-  // Fetch updated order with tickets for email
-  const fulfilledOrder = await prisma.order.findUnique({
-    where: { id: orderId },
-    include: {
-      tickets: {
-        include: { competition: { select: { title: true } } },
-        orderBy: { ticketNumber: "asc" },
-      },
-    },
-  });
-
-  if (fulfilledOrder) {
-    const groupMap: Record<string, { competitionTitle: string; ticketNumbers: number[]; quantity: number }> = {};
-    for (const ticket of fulfilledOrder.tickets) {
-      const title = ticket.competition.title;
-      if (!groupMap[title]) groupMap[title] = { competitionTitle: title, ticketNumbers: [], quantity: 0 };
-      groupMap[title].ticketNumbers.push(ticket.ticketNumber);
-      groupMap[title].quantity++;
-    }
-
-    await sendOrderConfirmationEmail({
-      to: order.email,
-      customerName: order.customerName,
-      orderId: order.id,
-      tickets: Object.values(groupMap),
-      total: order.total,
-    });
-  }
-
-  return res.status(200).json({ orderId });
+  return res.status(200).json({ orderId, ticketGroups, customerName, customerEmail, total });
 }
